@@ -1,1 +1,2 @@
-# exfilter
+
+The Exfilter project is a WIP project that aims to allow a Kubernetes cluster operator to detect and filter data exfiltration by observing and matching external-bound requests to predefined data schemas with a set of rules.

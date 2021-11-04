@@ -1,0 +1,6 @@
+apiVersion: exfilter.io/v1alpha1
+kind: Schema
+metadata:
+  name: schema-sample
+spec:
+  # TODO(user): Add fields here

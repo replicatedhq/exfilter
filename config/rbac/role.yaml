@@ -1,0 +1,86 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - exfilter.io
+  resources:
+  - alerts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - exfilter.io
+  resources:
+  - alerts/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - exfilter.io
+  resources:
+  - alerts/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - exfilter.io
+  resources:
+  - configs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - exfilter.io
+  resources:
+  - configs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - exfilter.io
+  resources:
+  - configs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - exfilter.io
+  resources:
+  - schemas
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - exfilter.io
+  resources:
+  - schemas/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - exfilter.io
+  resources:
+  - schemas/status
+  verbs:
+  - get
+  - patch
+  - update
