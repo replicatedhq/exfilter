@@ -1,4 +1,48 @@
 
+SHELL := /bin/bash
+VERSION ?=`git describe --tags`
+DATE=`date -u +"%Y-%m-%dT%H:%M:%SZ"`
+VERSION_PACKAGE = github.com/exfilter/exfilter/pkg/version
+GIT_TREE = $(shell git rev-parse --is-inside-work-tree 2>/dev/null)
+ifneq "$(GIT_TREE)" ""
+define GIT_UPDATE_INDEX_CMD
+git update-index --assume-unchanged
+endef
+define GIT_SHA
+`git rev-parse HEAD`
+endef
+else
+define GIT_UPDATE_INDEX_CMD
+echo "Not a git repo, skipping git update-index"
+endef
+define GIT_SHA
+""
+endef
+endif
+
+UNAME := $(shell uname)
+ifeq ($(UNAME), Linux)
+define LDFLAGS
+-ldflags "\
+	-X ${VERSION_PACKAGE}.version=${VERSION} \
+	-X ${VERSION_PACKAGE}.gitSHA=${GIT_SHA} \
+	-X ${VERSION_PACKAGE}.buildTime=${DATE} \
+	-w -extldflags \"-static\" \
+"
+endef
+else # all other OSes, including Windows and Darwin
+define LDFLAGS
+-ldflags "\
+	-X ${VERSION_PACKAGE}.version=${VERSION} \
+	-X ${VERSION_PACKAGE}.gitSHA=${GIT_SHA} \
+	-X ${VERSION_PACKAGE}.buildTime=${DATE} \
+"
+endef
+endif
+
+CLANG ?= clang-12
+CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
+
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -18,7 +62,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 .PHONY: all
-all: manager exfilter
+all: manager bin/exfilter
 
 ##@ General
 
@@ -44,7 +88,10 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="pkg/..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
+generate: export BPF_CLANG := clang-9
+generate: export BPF_CFLAGS := $(CFLAGS)
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	go generate ./pkg/probe/...
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="pkg/..."
 
 .PHONY: fmt
@@ -59,8 +106,8 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./pkg/... -coverprofile cover.out
 
-.PHONY: exfilter
-exfilter: fmt vet
+.PHONY: bin/exfilter
+bin/exfilter: fmt vet
 	go build -o ./bin/exfilter ./cmd/exfilter/main.go
 
 .PHONY: manager
