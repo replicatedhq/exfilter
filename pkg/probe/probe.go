@@ -38,12 +38,9 @@ func Start() error {
 		return fmt.Errorf("attach uprobes: %w", err)
 	}
 
-	// Read loop reporting the total amount of times the kernel
-	// function was entered, once per second.
+	log.Println("waiting for events from probes...")
+
 	ticker := time.NewTicker(1 * time.Second)
-
-	log.Println("Waiting for events..")
-
 	for {
 		select {
 		case <-ticker.C:
@@ -51,7 +48,7 @@ func Start() error {
 			if err := objs.KprobeMap.Lookup(mapKey, &value); err != nil {
 				return fmt.Errorf("lookup kprobe map: %w", err)
 			}
-			log.Printf("%s called %d times\n", fn, value)
+			log.Printf("sendto called %d times\n", value)
 		case <-stopper:
 			return nil
 		}
@@ -65,6 +62,8 @@ func attachKprobes(objs *bpfObjects) error {
 		return fmt.Errorf("opening kprobe: %w", err)
 	}
 	defer kp.Close()
+
+	return nil
 }
 
 func attachUprobes(objs *bpfObjects) error {
