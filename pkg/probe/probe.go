@@ -1,16 +1,21 @@
 package probe
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/rlimit"
 )
+
+type Event struct {
+}
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf ./bpf/kprobe_send.c -- -I../headers
@@ -31,41 +36,78 @@ func Start() error {
 	}
 	defer objs.Close()
 
-	if err := attachKprobes(&objs); err != nil {
+	probes, err := attachKprobes(&objs)
+	if err != nil {
 		return fmt.Errorf("attach kprobes: %w", err)
 	}
-	if err := attachUprobes(&objs); err != nil {
+	for _, probe := range probes {
+		defer probe.Close()
+	}
+
+	probes, err = attachUprobes(&objs)
+	if err != nil {
 		return fmt.Errorf("attach uprobes: %w", err)
+	}
+	for _, probe := range probes {
+		defer probe.Close()
 	}
 
 	log.Println("waiting for events from probes...")
 
-	ticker := time.NewTicker(1 * time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			var value uint64
-			if err := objs.KprobeMap.Lookup(mapKey, &value); err != nil {
-				return fmt.Errorf("lookup kprobe map: %w", err)
-			}
-			log.Printf("sendto called %d times\n", value)
-		case <-stopper:
-			return nil
+	rd, err := perf.NewReader(objs.Events, os.Getpagesize())
+	if err != nil {
+		return fmt.Errorf("creating perf event reader: %w", err)
+	}
+	defer rd.Close()
+
+	go func() {
+		// Wait for a signal and close the perf reader,
+		// which will interrupt rd.Read() and make the program exit.
+		<-stopper
+		log.Println("Received signal, exiting program..")
+
+		if err := rd.Close(); err != nil {
+			fmt.Printf("closing perf event reader: %s", err)
 		}
+	}()
+
+	var event Event
+	for {
+		record, err := rd.Read()
+		if err != nil {
+			if perf.IsClosed(err) {
+				return nil
+			}
+			log.Printf("reading from perf event reader: %s", err)
+		}
+
+		if record.LostSamples != 0 {
+			log.Printf("perf event ring buffer full, dropped %d samples", record.LostSamples)
+			continue
+		}
+
+		// Parse the perf event entry into an Event structure.
+		if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
+			log.Printf("parsing perf event: %s", err)
+			continue
+		}
+
+		fmt.Printf("event: %#v\n", event)
 	}
 }
 
 // attachKprobes will link the kernel ebpf probes
-func attachKprobes(objs *bpfObjects) error {
-	kp, err := link.Kprobe("sys_sendto", objs.KprobeSendto)
+// the caller is responsible for closing the probes
+func attachKprobes(objs *bpfObjects) ([]link.Link, error) {
+	log.Println("opening kprobe for sys_sendto")
+	sendTo, err := link.Kprobe("sys_sendto", objs.KprobeSendto)
 	if err != nil {
-		return fmt.Errorf("opening kprobe: %w", err)
+		return nil, fmt.Errorf("opening kprobe: %w", err)
 	}
-	defer kp.Close()
 
-	return nil
+	return []link.Link{sendTo}, nil
 }
 
-func attachUprobes(objs *bpfObjects) error {
-	return nil
+func attachUprobes(objs *bpfObjects) ([]link.Link, error) {
+	return nil, nil
 }
