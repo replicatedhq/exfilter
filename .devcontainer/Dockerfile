@@ -61,7 +61,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get install -y --no-install-recommends libnss3 libnspr4 libatk-bridge2.0-0 libatk1.0-0 libx11-6 libpangocairo-1.0-0 \
                                                   libx11-xcb1 libcups2 libxcomposite1 libxdamage1 libxfixes3 libpango-1.0-0 libgbm1 libgtk-3-0 \
     # Install some stuff for bpf
-    && apt-get install -y clang-9 \
+    && apt-get install -y clang-9 libc6-dev-i386 \
     && bash /tmp/scripts/sshd-debian.sh \
     && bash /tmp/scripts/github-debian.sh \
     && bash /tmp/scripts/azcli-debian.sh \

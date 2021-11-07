@@ -15,6 +15,7 @@ import (
 )
 
 type Event struct {
+	Comm [16]byte
 }
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -92,7 +93,7 @@ func Start() error {
 			continue
 		}
 
-		fmt.Printf("event: %#v\n", event)
+		fmt.Printf("event.comm: %s\n", event.Comm)
 	}
 }
 
