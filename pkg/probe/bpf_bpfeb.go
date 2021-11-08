@@ -53,7 +53,10 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	KprobeSendto *ebpf.ProgramSpec `ebpf:"kprobe_sendto"`
+	KprobeSend    *ebpf.ProgramSpec `ebpf:"kprobe_send"`
+	KprobeSendmsg *ebpf.ProgramSpec `ebpf:"kprobe_sendmsg"`
+	KprobeSendto  *ebpf.ProgramSpec `ebpf:"kprobe_sendto"`
+	KprobeWrite   *ebpf.ProgramSpec `ebpf:"kprobe_write"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -95,12 +98,18 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	KprobeSendto *ebpf.Program `ebpf:"kprobe_sendto"`
+	KprobeSend    *ebpf.Program `ebpf:"kprobe_send"`
+	KprobeSendmsg *ebpf.Program `ebpf:"kprobe_sendmsg"`
+	KprobeSendto  *ebpf.Program `ebpf:"kprobe_sendto"`
+	KprobeWrite   *ebpf.Program `ebpf:"kprobe_write"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
+		p.KprobeSend,
+		p.KprobeSendmsg,
 		p.KprobeSendto,
+		p.KprobeWrite,
 	)
 }
 

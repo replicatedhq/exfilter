@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/rlimit"
@@ -100,13 +101,25 @@ func Start() error {
 // attachKprobes will link the kernel ebpf probes
 // the caller is responsible for closing the probes
 func attachKprobes(objs *bpfObjects) ([]link.Link, error) {
-	log.Println("opening kprobe for sys_sendto")
-	sendTo, err := link.Kprobe("sys_sendto", objs.KprobeSendto)
-	if err != nil {
-		return nil, fmt.Errorf("opening kprobe: %w", err)
+	probes := map[string]*ebpf.Program{
+		"sys_sendto":  objs.KprobeSendto,
+		"sys_send":    objs.KprobeSend,
+		"sys_sendmsg": objs.KprobeSendmsg,
 	}
 
-	return []link.Link{sendTo}, nil
+	links := []link.Link{}
+
+	log.Println("opening kprobes")
+	for symbol, prog := range probes {
+		l, err := link.Kprobe(symbol, prog)
+		if err != nil {
+			return nil, fmt.Errorf("opening kprobe: %w", err)
+		}
+
+		links = append(links, l)
+	}
+
+	return links, nil
 }
 
 func attachUprobes(objs *bpfObjects) ([]link.Link, error) {
