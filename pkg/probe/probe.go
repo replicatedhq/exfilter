@@ -15,8 +15,24 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-type Event struct {
+type EventCommon struct {
 	Comm [16]byte
+}
+
+type SendMsgEvent struct {
+	EventCommon
+}
+
+type SendToEvent struct {
+	EventCommon
+}
+
+type SendEvent struct {
+	EventCommon
+}
+
+type WriteEvent struct {
+	EventCommon
 }
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -56,17 +72,78 @@ func Start() error {
 
 	log.Println("waiting for events from probes...")
 
-	sendmsgReader, err := readEventsFrom("sendmsg", objs.SendmsgEvents)
+	// also for debugging and in dev, let's ignore
+	// some really noisy processes that run on a codespace
+	// (char 16)
+	// THIS SHOULD NOT REMAIN
+	ignoredProcesses := []string{
+		"vsls-agent\x00\x00\x00\x00\x00\x00",
+		"codespaces\x00\x00\x00\x00\x00\x00",
+		"systemd\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+		"systemd-journal\x00",
+		"systemd-resolve\x00",
+		"systemd-udevd\x00\x00\x00",
+		"dbus-daemon\x00\x00\x00\x00\x00",
+	}
+
+	sendmsgReader, err := readEventsFrom("sendmsg", objs.SendmsgEvents, func(data []byte) {
+		// Parse the perf event entry into an Event structure.
+		event := SendMsgEvent{}
+		if err := binary.Read(bytes.NewBuffer(data), binary.LittleEndian, &event); err != nil {
+			log.Printf("parsing perf event: %s", err)
+			return
+		}
+
+		for _, ignoredProcess := range ignoredProcesses {
+			if string(event.EventCommon.Comm[:]) == ignoredProcess {
+				return
+			}
+		}
+
+		fmt.Printf("[%s] event.comm: %s\n", "sendmsg", event.Comm)
+	})
 	if err != nil {
 		return fmt.Errorf("read events from: %w", err)
 	}
 	defer sendmsgReader.Close()
-	sendtoReader, err := readEventsFrom("sendto", objs.SendtoEvents)
+
+	sendtoReader, err := readEventsFrom("sendto", objs.SendtoEvents, func(data []byte) {
+		// Parse the perf event entry into an Event structure.
+		event := SendToEvent{}
+		if err := binary.Read(bytes.NewBuffer(data), binary.LittleEndian, &event); err != nil {
+			log.Printf("parsing perf event: %s", err)
+			return
+		}
+
+		for _, ignoredProcess := range ignoredProcesses {
+			if string(event.EventCommon.Comm[:]) == ignoredProcess {
+				return
+			}
+		}
+
+		fmt.Printf("[%s] event.comm: %s\n", "sendto", event.Comm)
+	})
 	if err != nil {
 		return fmt.Errorf("read events from: %w", err)
 	}
 	defer sendtoReader.Close()
-	sendReader, err := readEventsFrom("send", objs.SendEvents)
+
+	sendReader, err := readEventsFrom("send", objs.SendEvents, func(data []byte) {
+		// Parse the perf event entry into an Event structure.
+		event := SendEvent{}
+		if err := binary.Read(bytes.NewBuffer(data), binary.LittleEndian, &event); err != nil {
+			log.Printf("parsing perf event: %s", err)
+			return
+		}
+
+		for _, ignoredProcess := range ignoredProcesses {
+			if string(event.EventCommon.Comm[:]) == ignoredProcess {
+				return
+			}
+		}
+
+		fmt.Printf("[%s] event.comm: %s\n", "send", event.Comm)
+	})
 	if err != nil {
 		return fmt.Errorf("read events from: %w", err)
 	}
@@ -88,27 +165,10 @@ func Start() error {
 	return nil
 }
 
-func readEventsFrom(symbol string, m *ebpf.Map) (*perf.Reader, error) {
+func readEventsFrom(symbol string, m *ebpf.Map, cb func(data []byte)) (*perf.Reader, error) {
 	rd, err := perf.NewReader(m, os.Getpagesize())
 	if err != nil {
 		return nil, fmt.Errorf("creating perf event reader: %w", err)
-	}
-
-	// right now, all events are the same struct...
-	var event Event
-
-	// also for debugging and in dev, let's ignore
-	// some really noisy processes that run on a codespace
-	// (char 16)
-	// THIS SHOULD NOT REMAIN
-	ignoredProcesses := []string{
-		"vsls-agent\x00\x00\x00\x00\x00\x00",
-		"codespaces\x00\x00\x00\x00\x00\x00",
-		"systemd\x00\x00\x00\x00\x00\x00\x00\x00\x00",
-		"systemd-journal\x00",
-		"systemd-resolve\x00",
-		"systemd-udevd\x00\x00\x00",
-		"dbus-daemon\x00\x00\x00\x00\x00",
 	}
 
 	go func() {
@@ -126,24 +186,8 @@ func readEventsFrom(symbol string, m *ebpf.Map) (*perf.Reader, error) {
 				continue
 			}
 
-			// Parse the perf event entry into an Event structure.
-			if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
-				log.Printf("parsing perf event: %s", err)
-				continue
-			}
+			cb(record.RawSample)
 
-			ignore := false
-			for _, ignoredProcess := range ignoredProcesses {
-				if string(event.Comm[:]) == ignoredProcess {
-					ignore = true
-				}
-			}
-
-			if ignore {
-				continue
-			}
-
-			fmt.Printf("[%s] event.comm: %s\n", symbol, event.Comm)
 		}
 	}()
 
