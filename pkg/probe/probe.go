@@ -97,6 +97,20 @@ func readEventsFrom(symbol string, m *ebpf.Map) (*perf.Reader, error) {
 	// right now, all events are the same struct...
 	var event Event
 
+	// also for debugging and in dev, let's ignore
+	// some really noisy processes that run on a codespace
+	// (char 16)
+	// THIS SHOULD NOT REMAIN
+	ignoredProcesses := []string{
+		"vsls-agent\x00\x00\x00\x00\x00\x00",
+		"codespaces\x00\x00\x00\x00\x00\x00",
+		"systemd\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+		"systemd-journal\x00",
+		"systemd-resolve\x00",
+		"systemd-udevd\x00\x00\x00",
+		"dbus-daemon\x00\x00\x00\x00\x00",
+	}
+
 	go func() {
 		for {
 			record, err := rd.Read()
@@ -115,6 +129,17 @@ func readEventsFrom(symbol string, m *ebpf.Map) (*perf.Reader, error) {
 			// Parse the perf event entry into an Event structure.
 			if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
 				log.Printf("parsing perf event: %s", err)
+				continue
+			}
+
+			ignore := false
+			for _, ignoredProcess := range ignoredProcesses {
+				if string(event.Comm[:]) == ignoredProcess {
+					ignore = true
+				}
+			}
+
+			if ignore {
 				continue
 			}
 
