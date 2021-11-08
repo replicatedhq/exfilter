@@ -46,56 +46,83 @@ func Start() error {
 		defer probe.Close()
 	}
 
-	probes, err = attachUprobes(&objs)
-	if err != nil {
-		return fmt.Errorf("attach uprobes: %w", err)
-	}
-	for _, probe := range probes {
-		defer probe.Close()
-	}
+	// probes, err = attachUprobes(&objs)
+	// if err != nil {
+	// 	return fmt.Errorf("attach uprobes: %w", err)
+	// }
+	// for _, probe := range probes {
+	// 	defer probe.Close()
+	// }
 
 	log.Println("waiting for events from probes...")
 
-	rd, err := perf.NewReader(objs.Events, os.Getpagesize())
+	sendmsgReader, err := readEventsFrom("sendmsg", objs.SendmsgEvents)
 	if err != nil {
-		return fmt.Errorf("creating perf event reader: %w", err)
+		return fmt.Errorf("read events from: %w", err)
 	}
-	defer rd.Close()
+	defer sendmsgReader.Close()
+	sendtoReader, err := readEventsFrom("sendto", objs.SendtoEvents)
+	if err != nil {
+		return fmt.Errorf("read events from: %w", err)
+	}
+	defer sendtoReader.Close()
+	sendReader, err := readEventsFrom("send", objs.SendEvents)
+	if err != nil {
+		return fmt.Errorf("read events from: %w", err)
+	}
+	defer sendReader.Close()
+
+	<-stopper
+
+	log.Println("Received signal, closing all probes and exiting program..")
+	if err := sendmsgReader.Close(); err != nil {
+		return fmt.Errorf("closing sendmsg reader: %w", err)
+	}
+	if err := sendtoReader.Close(); err != nil {
+		return fmt.Errorf("closing sendto reader: %w", err)
+	}
+	if err := sendReader.Close(); err != nil {
+		return fmt.Errorf("closing send reader: %w", err)
+	}
+
+	return nil
+}
+
+func readEventsFrom(symbol string, m *ebpf.Map) (*perf.Reader, error) {
+	rd, err := perf.NewReader(m, os.Getpagesize())
+	if err != nil {
+		return nil, fmt.Errorf("creating perf event reader: %w", err)
+	}
+
+	// right now, all events are the same struct...
+	var event Event
 
 	go func() {
-		// Wait for a signal and close the perf reader,
-		// which will interrupt rd.Read() and make the program exit.
-		<-stopper
-		log.Println("Received signal, exiting program..")
+		for {
+			record, err := rd.Read()
+			if err != nil {
+				if perf.IsClosed(err) {
+					return
+				}
+				log.Printf("reading from perf event reader: %s", err)
+			}
 
-		if err := rd.Close(); err != nil {
-			fmt.Printf("closing perf event reader: %s", err)
+			if record.LostSamples != 0 {
+				log.Printf("perf event ring buffer full, dropped %d samples", record.LostSamples)
+				continue
+			}
+
+			// Parse the perf event entry into an Event structure.
+			if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
+				log.Printf("parsing perf event: %s", err)
+				continue
+			}
+
+			fmt.Printf("[%s] event.comm: %s\n", symbol, event.Comm)
 		}
 	}()
 
-	var event Event
-	for {
-		record, err := rd.Read()
-		if err != nil {
-			if perf.IsClosed(err) {
-				return nil
-			}
-			log.Printf("reading from perf event reader: %s", err)
-		}
-
-		if record.LostSamples != 0 {
-			log.Printf("perf event ring buffer full, dropped %d samples", record.LostSamples)
-			continue
-		}
-
-		// Parse the perf event entry into an Event structure.
-		if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
-			log.Printf("parsing perf event: %s", err)
-			continue
-		}
-
-		fmt.Printf("event.comm: %s\n", event.Comm)
-	}
+	return rd, nil
 }
 
 // attachKprobes will link the kernel ebpf probes
