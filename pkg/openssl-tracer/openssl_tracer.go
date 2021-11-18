@@ -1,4 +1,4 @@
-package main
+package openssltracer
 
 import (
 	"bytes"
@@ -43,10 +43,10 @@ var kSSLReadRetProbeSpec = UprobeSpec{ObjPath: "/usr/lib/x86_64-linux-gnu/libssl
 
 var kUProbes = []UprobeSpec{kSSLWriteEntryProbeSpec, kSSLWriteRetProbeSpec, kSSLReadEntryProbeSpec, kSSLReadRetProbeSpec}
 
-func main() {
+func Start() error {
 	b, err := ioutil.ReadFile("./bpf/openssl_tracer_bpf_funcs.c") // read c file to bytes slice
 	if err != nil {
-		fmt.Print(err)
+		return fmt.Errorf("error opening file: %w", err)
 	}
 	source := string(b) // convert content to a 'string'
 
@@ -56,8 +56,7 @@ func main() {
 	for _, probeSpec := range kUProbes {
 		Uprobe, _ := m.LoadUprobe(probeSpec.ProbeFn)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load %s: %s\n", probeSpec.ProbeFn, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to load %s: %w\n", probeSpec.ProbeFn, err)
 		}
 		if probeSpec.Type == PROBE_ENTRY {
 			m.AttachUprobe(probeSpec.ObjPath, probeSpec.Symbol, Uprobe, -1)
@@ -72,8 +71,7 @@ func main() {
 
 	perfMap, err := bpf.InitPerfMap(table, channel, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to init perf map: %s\n", err)
-		os.Exit(1)
+		fmt.Errorf("Failed to init perf map: %w\n", err)
 	}
 
 	sig := make(chan os.Signal, 1)
@@ -104,4 +102,5 @@ func main() {
 	perfMap.Start()
 	<-sig
 	perfMap.Stop()
+	return nil
 }
