@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/signal"
 
+	ps "github.com/mitchellh/go-ps"
+
 	bpf "github.com/iovisor/gobpf/bcc"
 )
 
@@ -77,7 +79,7 @@ func Start() error {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, os.Kill)
 
-	fmt.Printf("%10s\t%30s\t%8s\n", "PID", "DATA", "TYPE(IN/OUT)")
+	fmt.Printf("%10s\t%10s\t%30s\t%8s\n", "PID", "PROCESSNAME", "DATA", "TYPE(IN/OUT)")
 	go func() {
 		var event sslDataEvent
 		for {
@@ -94,8 +96,8 @@ func Start() error {
 			} else {
 				eventType = "Exit"
 			}
-
-			fmt.Printf("%10d\t%30s\t%8s\n", event.Pid, comm, eventType)
+			p, _ := ps.FindProcess(int(event.Pid))
+			fmt.Printf("%10d\t%10s\t%30s\t%8s\n", event.Pid, p.Executable(), comm, eventType)
 		}
 	}()
 

@@ -8,6 +8,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/iovisor/gobpf v0.2.0 // indirect
+	github.com/mitchellh/go-ps v1.0.0
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.15.0
 	github.com/spf13/cobra v1.2.1 // indirect
