@@ -88,7 +88,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="pkg/..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
-generate: export BPF_CLANG := clang-9
+generate: export BPF_CLANG := clang-10
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	go generate ./pkg/probe/...
