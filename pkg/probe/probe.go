@@ -23,6 +23,10 @@ type SendMsgEvent struct {
 	EventCommon
 }
 
+type SendMMsgEvent struct {
+	EventCommon
+}
+
 type SendToEvent struct {
 	EventCommon
 }
@@ -31,7 +35,15 @@ type SendEvent struct {
 	EventCommon
 }
 
+type SendFileEvent struct {
+	EventCommon
+}
+
 type WriteEvent struct {
+	EventCommon
+}
+
+type WritevEvent struct {
 	EventCommon
 }
 
@@ -107,6 +119,48 @@ func Start() error {
 	}
 	defer sendmsgReader.Close()
 
+	sendmmsgReader, err := readEventsFrom("sendmmsg", objs.SendmmsgEvents, func(data []byte) {
+		// Parse the perf event entry into an Event structure.
+		event := SendMMsgEvent{}
+		if err := binary.Read(bytes.NewBuffer(data), binary.LittleEndian, &event); err != nil {
+			log.Printf("parsing perf event: %s", err)
+			return
+		}
+
+		for _, ignoredProcess := range ignoredProcesses {
+			if string(event.EventCommon.Comm[:]) == ignoredProcess {
+				return
+			}
+		}
+
+		fmt.Printf("[%s] event.comm: %s\n", "sendmmsg", event.Comm)
+	})
+	if err != nil {
+		return fmt.Errorf("read events from: %w", err)
+	}
+	defer sendmmsgReader.Close()
+
+	sendfileReader, err := readEventsFrom("sendfile", objs.SendfileEvents, func(data []byte) {
+		// Parse the perf event entry into an Event structure.
+		event := SendFileEvent{}
+		if err := binary.Read(bytes.NewBuffer(data), binary.LittleEndian, &event); err != nil {
+			log.Printf("parsing perf event: %s", err)
+			return
+		}
+
+		for _, ignoredProcess := range ignoredProcesses {
+			if string(event.EventCommon.Comm[:]) == ignoredProcess {
+				return
+			}
+		}
+
+		fmt.Printf("[%s] event.comm: %s\n", "sendfile", event.Comm)
+	})
+	if err != nil {
+		return fmt.Errorf("read events from: %w", err)
+	}
+	defer sendfileReader.Close()
+
 	sendtoReader, err := readEventsFrom("sendto", objs.SendtoEvents, func(data []byte) {
 		// Parse the perf event entry into an Event structure.
 		event := SendToEvent{}
@@ -149,17 +203,65 @@ func Start() error {
 	}
 	defer sendReader.Close()
 
+	writeReader, err := readEventsFrom("write", objs.SendEvents, func(data []byte) {
+		// Parse the perf event entry into an Event structure.
+		event := WriteEvent{}
+		if err := binary.Read(bytes.NewBuffer(data), binary.LittleEndian, &event); err != nil {
+			log.Printf("parsing perf event: %s", err)
+			return
+		}
+
+		for _, ignoredProcess := range ignoredProcesses {
+			if string(event.EventCommon.Comm[:]) == ignoredProcess {
+				return
+			}
+		}
+
+		fmt.Printf("[%s] event.comm: %s\n", "write", event.Comm)
+	})
+	if err != nil {
+		return fmt.Errorf("read events from: %w", err)
+	}
+	defer writeReader.Close()
+
+	writevReader, err := readEventsFrom("writev", objs.SendEvents, func(data []byte) {
+		// Parse the perf event entry into an Event structure.
+		event := WritevEvent{}
+		if err := binary.Read(bytes.NewBuffer(data), binary.LittleEndian, &event); err != nil {
+			log.Printf("parsing perf event: %s", err)
+			return
+		}
+
+		for _, ignoredProcess := range ignoredProcesses {
+			if string(event.EventCommon.Comm[:]) == ignoredProcess {
+				return
+			}
+		}
+
+		fmt.Printf("[%s] event.comm: %s\n", "writev", event.Comm)
+	})
+	if err != nil {
+		return fmt.Errorf("read events from: %w", err)
+	}
+	defer writevReader.Close()
+
 	<-stopper
 
 	log.Println("Received signal, closing all probes and exiting program..")
 	if err := sendmsgReader.Close(); err != nil {
 		return fmt.Errorf("closing sendmsg reader: %w", err)
 	}
+	if err := sendmmsgReader.Close(); err != nil {
+		return fmt.Errorf("closing sendmmsg reader: %w", err)
+	}
 	if err := sendtoReader.Close(); err != nil {
 		return fmt.Errorf("closing sendto reader: %w", err)
 	}
 	if err := sendReader.Close(); err != nil {
 		return fmt.Errorf("closing send reader: %w", err)
+	}
+	if err := sendfileReader.Close(); err != nil {
+		return fmt.Errorf("closing sendfile reader: %w", err)
 	}
 
 	return nil
@@ -198,9 +300,13 @@ func readEventsFrom(symbol string, m *ebpf.Map, cb func(data []byte)) (*perf.Rea
 // the caller is responsible for closing the probes
 func attachKprobes(objs *bpfObjects) ([]link.Link, error) {
 	probes := map[string]*ebpf.Program{
-		"sys_sendto":  objs.KprobeSendto,
-		"sys_send":    objs.KprobeSend,
-		"sys_sendmsg": objs.KprobeSendmsg,
+		"sys_sendto":   objs.KprobeSendto,
+		"sys_send":     objs.KprobeSend,
+		"sys_sendmsg":  objs.KprobeSendmsg,
+		"sys_sendmmsg": objs.KprobeSendmmsg,
+		"sys_sendfile": objs.KprobeSendfile,
+		"sys_write":    objs.KprobeWrite,
+		"sys_writev":   objs.KprobeWritev,
 	}
 
 	links := []link.Link{}
