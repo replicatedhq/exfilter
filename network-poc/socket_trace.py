@@ -116,7 +116,8 @@ def get_ipv4_session_key(k):
 	return SessionKey(pid=k.pid, laddr=inet_ntop(AF_INET, pack("I", k.saddr)),lport=k.lport, daddr=inet_ntop(AF_INET, pack("I", k.daddr)), dport=k.dport)
 
 # init bpf
-b = BPF(text=bpf_program)
+# b = BPF(text=bpf_program)
+b = BPF(src_file="socket_trace.c")
 
 ipv4_send_bytes = b["ipv4_send_bytes"]
 ipv4_recv_bytes = b["ipv4_recv_bytes"]
