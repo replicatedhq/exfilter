@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/exfilter/exfilter/pkg/exfilterlogger"
 	ruleparser "github.com/exfilter/exfilter/pkg/rule-parser"
 	tcpegresstracer "github.com/exfilter/exfilter/pkg/tcpegress-tracer"
 	bpf "github.com/iovisor/gobpf/bcc"
@@ -28,7 +29,6 @@ func MatchEvents() error {
 		return fmt.Errorf("error initializing tcp egress tracer: %w", err)
 	}
 
-	fmt.Println(table)
 	channel := make(chan []byte)
 
 	perfMap, err := bpf.InitPerfMap(table, channel, nil)
@@ -36,10 +36,15 @@ func MatchEvents() error {
 		fmt.Println("failed to init perf map, ", err)
 		return fmt.Errorf("failed to init perf map: %w", err)
 	}
-	fmt.Println("perfmap initialized")
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, os.Kill)
 
+	f, err := exfilterlogger.InitLogger("exfilter.log")
+	if err != nil {
+		return err
+	}
+	defer exfilterlogger.DeinitLogger(f)
 	fmt.Printf("%10s\t%10s\t%30s\t%30s\t%50s\n", "PID", "PROCESSNAME", "LADDR", "RADDR", "DATA")
 	go func() {
 		var event tcpegresstracer.TCPEgressEvent
@@ -63,6 +68,7 @@ func MatchEvents() error {
 			for _, content := range prMap["dstPortRules"][int(event.Dport)] {
 				if strings.Contains(strings.ToLower(string(event.Data)), strings.ToLower(content)) {
 					isMatch = true
+					// eventmsg :=
 					break
 				}
 			}
@@ -72,6 +78,12 @@ func MatchEvents() error {
 			}
 
 			p, _ := ps.FindProcess(int(event.Pid))
+			logevent := exfilterlogger.EgressEvent{}
+			logevent.Pid = event.Pid
+			logevent.Saddr = tcpegresstracer.Inet_ntoa(event.Saddr) + ":" + strconv.Itoa(int(event.Lport))
+			logevent.Daddr = tcpegresstracer.Inet_ntoa(event.Daddr) + ":" + strconv.Itoa(int(event.Dport))
+			logevent.Data = string(event.Data)
+
 			fmt.Printf("%-10d\t%-10s\t%-30s\t%-30s\t%-50s\n", event.Pid, p.Executable(), tcpegresstracer.Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), tcpegresstracer.Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), string(event.Data))
 		}
 	}()
