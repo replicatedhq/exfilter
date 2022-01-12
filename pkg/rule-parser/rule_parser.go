@@ -146,10 +146,15 @@ var Rules map[uint32]interface{}
 // type PortRuleMap map[uint32]map[uint32]map[uint32][]PortRule
 type PortRule map[uint32][]string
 
-func ParseRuleFile(filename string) map[string]map[int][]string {
-	var prMap map[string]map[int][]string = make(map[string]map[int][]string)
+type RuleOption struct {
+	Content string /* string to be matched */
+	Message string /* event message to be logged */
+}
 
-	prMap["dstPortRules"] = make(map[int][]string)
+func ParseRuleFile(filename string) map[string]map[int][]RuleOption {
+	var prMap map[string]map[int][]RuleOption = make(map[string]map[int][]RuleOption)
+
+	prMap["dstPortRules"] = make(map[int][]RuleOption)
 
 	var rule string
 	file, err := os.Open(filename)
@@ -171,7 +176,7 @@ func ParseRuleFile(filename string) map[string]map[int][]string {
 	return prMap
 }
 
-func ParseRule(rule string, prMap map[string]map[int][]string) {
+func ParseRule(rule string, prMap map[string]map[int][]RuleOption) {
 	if strings.HasPrefix(rule, "#") {
 		return
 	}
@@ -179,9 +184,12 @@ func ParseRule(rule string, prMap map[string]map[int][]string) {
 	toks := strings.SplitN(rule, " ", 8)
 
 	var dstPort int
+	var ruleOption RuleOption
 	dstPort, _ = strconv.Atoi(toks[6])
-	ruleOptions := parseRuleOptions(toks[7])
-	prMap["dstPortRules"][dstPort] = append(prMap["dstPortRules"][dstPort], ruleOptions["content"])
+	ruleOptionTmp := parseRuleOptions(toks[7])
+	ruleOption.Content = ruleOptionTmp["content"]
+	ruleOption.Message = ruleOptionTmp["msg"]
+	prMap["dstPortRules"][dstPort] = append(prMap["dstPortRules"][dstPort], ruleOption)
 
 }
 

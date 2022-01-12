@@ -65,10 +65,11 @@ func MatchEvents() error {
 
 			// payload match
 			isMatch := false
-			for _, content := range prMap["dstPortRules"][int(event.Dport)] {
-				if strings.Contains(strings.ToLower(string(event.Data)), strings.ToLower(content)) {
+			var eventmsg string
+			for _, ruleOpt := range prMap["dstPortRules"][int(event.Dport)] {
+				if strings.Contains(strings.ToLower(string(event.Data)), strings.ToLower(ruleOpt.Content)) {
 					isMatch = true
-					// eventmsg :=
+					eventmsg = ruleOpt.Message
 					break
 				}
 			}
@@ -83,6 +84,9 @@ func MatchEvents() error {
 			logevent.Saddr = tcpegresstracer.Inet_ntoa(event.Saddr) + ":" + strconv.Itoa(int(event.Lport))
 			logevent.Daddr = tcpegresstracer.Inet_ntoa(event.Daddr) + ":" + strconv.Itoa(int(event.Dport))
 			logevent.Data = string(event.Data)
+			logevent.Msg = eventmsg
+
+			exfilterlogger.LogEvent(logevent)
 
 			fmt.Printf("%-10d\t%-10s\t%-30s\t%-30s\t%-50s\n", event.Pid, p.Executable(), tcpegresstracer.Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), tcpegresstracer.Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), string(event.Data))
 		}

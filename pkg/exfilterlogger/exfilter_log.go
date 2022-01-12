@@ -39,6 +39,7 @@ func LogEvent(event EgressEvent) error {
 		"SAddr":   event.Saddr,
 		"DAddr":   event.Daddr,
 		"Payload": event.Data,
+		"Message": event.Msg,
 	}).Info(event.Msg)
 	return nil
 }
