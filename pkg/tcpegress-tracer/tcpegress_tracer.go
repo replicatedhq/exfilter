@@ -120,3 +120,37 @@ func InitTCPTracer(pid uint32) (*bpf.Table, error) {
 
 	return table, nil
 }
+
+func InitTCPTracer1(pid uint32) (*bpf.Module, error) {
+	b, err := ioutil.ReadFile("../tcpegress-tracer/bpf/tcpegress_tracer_bpf.c") // read c file to bytes slice
+	if err != nil {
+		return nil, fmt.Errorf("error opening file: %w", err)
+	}
+	source := string(b) // convert content to a 'string'
+
+	if pid > 0 {
+		source = strings.Replace(source, "FILTER_PID", fmt.Sprintf("if (pid != %d) { return 0; }", pid), -1)
+	} else {
+		source = strings.Replace(source, "FILTER_PID", "", -1)
+	}
+
+	m := bpf.NewModule(source, []string{})
+	return m, nil
+}
+
+func DeInitTCPTracer(m *bpf.Module) {
+	m.Close()
+}
+
+func LoadBPFTable(m *bpf.Module) (*bpf.Table, error) {
+	KProbe, err := m.LoadKprobe("probe_tcp_sendmsg")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load probe_tcp_sendmsg: %w", err)
+	}
+
+	m.AttachKprobe("tcp_sendmsg", KProbe, -1)
+
+	table := bpf.NewTable(m.TableId("ipv4_send_events"), m)
+
+	return table, nil
+}

@@ -167,10 +167,7 @@ func ParseRuleFile(filename string) map[string]map[int][]RuleOption {
 
 	for scanner.Scan() {
 		rule = scanner.Text()
-		// fmt.Println(rule)
-
 		ParseRule(rule, prMap)
-
 	}
 
 	return prMap
@@ -190,7 +187,6 @@ func ParseRule(rule string, prMap map[string]map[int][]RuleOption) {
 	ruleOption.Content = ruleOptionTmp["content"]
 	ruleOption.Message = ruleOptionTmp["msg"]
 	prMap["dstPortRules"][dstPort] = append(prMap["dstPortRules"][dstPort], ruleOption)
-
 }
 
 func parseRuleOptions(ruleOptionRaw string) map[string]string {

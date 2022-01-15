@@ -8,9 +8,8 @@ import (
 	"os"
 	"os/signal"
 
-	ps "github.com/mitchellh/go-ps"
-
 	bpf "github.com/iovisor/gobpf/bcc"
+	"github.com/mitchellh/go-ps"
 )
 
 // #cgo LDFLAGS: -lbcc
@@ -29,7 +28,7 @@ type UprobeSpec struct {
 	ProbeFn string
 }
 
-type sslDataEvent struct {
+type SSLDataEvent struct {
 	EventType    int64
 	Timestamp_ns uint64
 	Pid          uint32
@@ -58,7 +57,7 @@ func Start() error {
 	for _, probeSpec := range kUProbes {
 		Uprobe, _ := m.LoadUprobe(probeSpec.ProbeFn)
 		if err != nil {
-			return fmt.Errorf("failed to load %s: %w\n", probeSpec.ProbeFn, err)
+			return fmt.Errorf("failed to load %s: %w", probeSpec.ProbeFn, err)
 		}
 		if probeSpec.Type == PROBE_ENTRY {
 			m.AttachUprobe(probeSpec.ObjPath, probeSpec.Symbol, Uprobe, -1)
@@ -73,7 +72,7 @@ func Start() error {
 
 	perfMap, err := bpf.InitPerfMap(table, channel, nil)
 	if err != nil {
-		fmt.Errorf("Failed to init perf map: %w\n", err)
+		return fmt.Errorf("failed to init perf map: %w", err)
 	}
 
 	sig := make(chan os.Signal, 1)
@@ -81,7 +80,7 @@ func Start() error {
 
 	fmt.Printf("%10s\t%10s\t%30s\t%8s\n", "PID", "PROCESSNAME", "DATA", "TYPE(IN/OUT)")
 	go func() {
-		var event sslDataEvent
+		var event SSLDataEvent
 		for {
 			data := <-channel
 			err := binary.Read(bytes.NewBuffer(data), binary.LittleEndian, &event)
@@ -89,6 +88,7 @@ func Start() error {
 				fmt.Printf("failed to decode received data: %s\n", err)
 				continue
 			}
+
 			comm := string(event.Data[:])
 			var eventType string
 			if AttachType(event.EventType) == PROBE_ENTRY {
@@ -105,4 +105,38 @@ func Start() error {
 	<-sig
 	perfMap.Stop()
 	return nil
+}
+
+func InitTLSTracer() (*bpf.Module, error) {
+	b, err := ioutil.ReadFile("../openssl-tracer/bpf/openssl_tracer_bpf_funcs.c")
+	if err != nil {
+		return nil, fmt.Errorf("error opening file: %w", err)
+	}
+
+	source := string(b)
+	m := bpf.NewModule(source, []string{})
+
+	return m, nil
+}
+
+func DeInitTLSTracer(m *bpf.Module) {
+	m.Close()
+}
+
+func LoadBPFTable(m *bpf.Module) (*bpf.Table, error) {
+	for _, probeSpec := range kUProbes {
+		Uprobe, err := m.LoadUprobe(probeSpec.ProbeFn)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load %s: %w", probeSpec.ProbeFn, err)
+		}
+		if probeSpec.Type == PROBE_ENTRY {
+			m.AttachUprobe(probeSpec.ObjPath, probeSpec.Symbol, Uprobe, -1)
+		} else {
+			m.AttachUretprobe(probeSpec.ObjPath, probeSpec.Symbol, Uprobe, -1)
+		}
+	}
+
+	table := bpf.NewTable(m.TableId("tls_events"), m)
+
+	return table, nil
 }
