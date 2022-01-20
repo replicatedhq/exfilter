@@ -9,11 +9,12 @@ import (
 
 type EgressEvent struct {
 	// EventTime time.Time
-	Pid   uint32
-	Saddr string
-	Daddr string
-	Data  string
-	Msg   string
+	Pid          uint32
+	Saddr        string
+	Daddr        string
+	Data         string
+	Msg          string
+	Timestamp_ns uint64
 }
 
 func InitLogger(logFilePath string) (*os.File, error) {

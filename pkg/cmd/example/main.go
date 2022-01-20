@@ -69,52 +69,8 @@ func main() {
 		return
 	}
 	defer exfilterlogger.DeinitLogger(f)
-	// fmt.Printf("%10s\t%10s\t%30s\t%30s\t%50s\n", "PID", "PROCESSNAME", "LADDR", "RADDR", "DATA")
-	go func() {
-		var event tcpegresstracer.TCPEgressEvent
-		for {
-			data := <-channel
-			event.Pid = binary.LittleEndian.Uint32(data[0:4])
-			event.Saddr = binary.LittleEndian.Uint32(data[4:8])
-			event.Daddr = binary.LittleEndian.Uint32(data[8:12])
-			event.Lport = binary.LittleEndian.Uint16(data[12:14])
-			event.Dport = binary.LittleEndian.Uint16(data[14:16])
-			event.DataLen = binary.LittleEndian.Uint32(data[16:20])
-			event.Data = data[20:]
 
-			// port match
-			if prMap["dstPortRules"][int(event.Dport)] == nil {
-				continue
-			}
-
-			// payload match
-			isMatch := false
-			var eventmsg string
-			for _, ruleOpt := range prMap["dstPortRules"][int(event.Dport)] {
-				if strings.Contains(strings.ToLower(string(event.Data)), strings.ToLower(ruleOpt.Content)) {
-					isMatch = true
-					eventmsg = ruleOpt.Message
-					break
-				}
-			}
-
-			if !isMatch {
-				continue
-			}
-
-			p, _ := ps.FindProcess(int(event.Pid))
-			logevent := exfilterlogger.EgressEvent{}
-			logevent.Pid = event.Pid
-			logevent.Saddr = tcpegresstracer.Inet_ntoa(event.Saddr) + ":" + strconv.Itoa(int(event.Lport))
-			logevent.Daddr = tcpegresstracer.Inet_ntoa(event.Daddr) + ":" + strconv.Itoa(int(event.Dport))
-			logevent.Data = string(event.Data)
-			logevent.Msg = eventmsg
-
-			exfilterlogger.LogEvent(logevent)
-
-			fmt.Printf("%-10d\t%-10s\t%-30s\t%-30s\t%-50s\n", event.Pid, p.Executable(), tcpegresstracer.Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), tcpegresstracer.Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), string(event.Data))
-		}
-	}()
+	var tls_event_queue = make(map[uint32][]openssltracer.SSLDataEvent) /* tls events queue, key pid, value SSLDataEvent slice */
 
 	go func() {
 		var tls_event openssltracer.SSLDataEvent
@@ -127,13 +83,78 @@ func main() {
 				continue
 			}
 
-			comm := string(tls_event.Data[:])
+			comm := string(tls_event.Data[:tls_event.Data_len])
 			var eventType string
-			if openssltracer.AttachType(tls_event.EventType) != openssltracer.PROBE_ENTRY {
+			// if openssltracer.AttachType(tls_event.EventType) != openssltracer.PROBE_ENTRY {
+			// 	continue
+			// }
+
+			p, _ := ps.FindProcess(int(tls_event.Pid))
+			fmt.Printf("%10d\t%10d\t%10s\t%30s\t%8s\n", tls_event.Pid, tls_event.Timestamp_ns, p.Executable(), comm, eventType)
+			tls_event_queue[tls_event.Pid] = append(tls_event_queue[tls_event.Pid], tls_event)
+		}
+	}()
+
+	go func() {
+		var event tcpegresstracer.TCPEgressEvent
+		for {
+			data := <-channel
+			event.Pid = binary.LittleEndian.Uint32(data[0:4])
+			event.Saddr = binary.LittleEndian.Uint32(data[4:8])
+			event.Daddr = binary.LittleEndian.Uint32(data[8:12])
+			event.Lport = binary.LittleEndian.Uint16(data[12:14])
+			event.Dport = binary.LittleEndian.Uint16(data[14:16])
+			event.DataLen = binary.LittleEndian.Uint32(data[16:20])
+			event.Timestamp_ns = binary.LittleEndian.Uint64(data[20:28])
+			event.Data = data[28:]
+
+			var ruleContents []ruleparser.RuleOption
+			// port match
+			if prMap["dstPortRules"][int(event.Dport)] != nil {
+				ruleContents = prMap["dstPortRules"][int(event.Dport)]
+			} else if prMap["srcPortRules"][int(event.Lport)] != nil {
+				ruleContents = prMap["srcPortRules"][int(event.Lport)]
+			} else {
 				continue
 			}
-			p, _ := ps.FindProcess(int(tls_event.Pid))
-			fmt.Printf("%10d\t%10s\t%30s\t%8s\n", tls_event.Pid, p.Executable(), comm, eventType)
+
+			// payload match
+			isMatch := false
+			var eventmsg string
+
+			for _, ruleOpt := range ruleContents {
+				if ruleOpt.Content == "*" {
+					isMatch = true
+					eventmsg = ruleOpt.Message
+					break
+				}
+				if strings.Contains(strings.ToLower(string(event.Data)), strings.ToLower(ruleOpt.Content)) {
+					isMatch = true
+					eventmsg = ruleOpt.Message
+					break
+				}
+			}
+			if !isMatch {
+				continue
+			}
+
+			p, _ := ps.FindProcess(int(event.Pid))
+			logevent := exfilterlogger.EgressEvent{}
+			logevent.Pid = event.Pid
+			logevent.Saddr = tcpegresstracer.Inet_ntoa(event.Saddr) + ":" + strconv.Itoa(int(event.Lport))
+			logevent.Daddr = tcpegresstracer.Inet_ntoa(event.Daddr) + ":" + strconv.Itoa(int(event.Dport))
+			logevent.Timestamp_ns = event.Timestamp_ns
+			if len(tls_event_queue[event.Pid]) > 0 { // event is captured at ssl_write before it comes down to tcp_send, put unencrypted text in the data field
+				logevent.Data = string(tls_event_queue[event.Pid][0].Data[:tls_event_queue[event.Pid][0].Data_len])
+				tls_event_queue[event.Pid] = tls_event_queue[event.Pid][1:] // remove the tls event from the queue
+			} else {
+				logevent.Data = string(event.Data)
+			}
+			logevent.Msg = eventmsg
+
+			exfilterlogger.LogEvent(logevent)
+
+			fmt.Printf("%-10d\t %-10d\t%-10s\t%-30s\t%-30s\t%-50s\n", event.Pid, event.Timestamp_ns, p.Executable(), tcpegresstracer.Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), tcpegresstracer.Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), string(event.Data))
 		}
 	}()
 

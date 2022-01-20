@@ -155,6 +155,7 @@ func ParseRuleFile(filename string) map[string]map[int][]RuleOption {
 	var prMap map[string]map[int][]RuleOption = make(map[string]map[int][]RuleOption)
 
 	prMap["dstPortRules"] = make(map[int][]RuleOption)
+	prMap["srcPortRules"] = make(map[int][]RuleOption)
 
 	var rule string
 	file, err := os.Open(filename)
@@ -182,11 +183,19 @@ func ParseRule(rule string, prMap map[string]map[int][]RuleOption) {
 
 	var dstPort int
 	var ruleOption RuleOption
-	dstPort, _ = strconv.Atoi(toks[6])
 	ruleOptionTmp := parseRuleOptions(toks[7])
 	ruleOption.Content = ruleOptionTmp["content"]
 	ruleOption.Message = ruleOptionTmp["msg"]
-	prMap["dstPortRules"][dstPort] = append(prMap["dstPortRules"][dstPort], ruleOption)
+
+	dstPort, _ = strconv.Atoi(toks[6])
+	if dstPort > 0 {
+		prMap["dstPortRules"][dstPort] = append(prMap["dstPortRules"][dstPort], ruleOption)
+	}
+
+	srcPort, _ := strconv.Atoi(toks[3])
+	if srcPort > 0 {
+		prMap["srcPortRules"][srcPort] = append(prMap["srcPortRules"][dstPort], ruleOption)
+	}
 }
 
 func parseRuleOptions(ruleOptionRaw string) map[string]string {

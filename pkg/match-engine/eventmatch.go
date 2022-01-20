@@ -58,15 +58,23 @@ func MatchEvents() error {
 			event.DataLen = binary.LittleEndian.Uint32(data[16:20])
 			event.Data = data[20:]
 
+			var ruleContents []ruleparser.RuleOption
 			// port match
-			if prMap["dstPortRules"][int(event.Dport)] == nil {
-				continue
+			if prMap["dstPortRules"][int(event.Dport)] != nil {
+				ruleContents = prMap["dstPortRules"][int(event.Dport)]
+			} else if prMap["srcPortRules"][int(event.Lport)] != nil {
+				ruleContents = prMap["srcPortRules"][int(event.Lport)]
 			}
 
 			// payload match
 			isMatch := false
 			var eventmsg string
-			for _, ruleOpt := range prMap["dstPortRules"][int(event.Dport)] {
+			for _, ruleOpt := range ruleContents {
+				if ruleOpt.Content == "*" {
+					isMatch = true
+					eventmsg = ruleOpt.Message
+					break
+				}
 				if strings.Contains(strings.ToLower(string(event.Data)), strings.ToLower(ruleOpt.Content)) {
 					isMatch = true
 					eventmsg = ruleOpt.Message

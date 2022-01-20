@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	bpf "github.com/iovisor/gobpf/bcc"
-	"github.com/mitchellh/go-ps"
 )
 
 // #cgo LDFLAGS: -lbcc
@@ -18,13 +17,14 @@ import (
 const SS_MAX_SEG_SIZE = 1024 * 50
 
 type TCPEgressEvent struct {
-	Pid     uint32
-	Saddr   uint32
-	Daddr   uint32
-	Lport   uint16
-	Dport   uint16
-	DataLen uint32
-	Data    []byte
+	Pid          uint32
+	Saddr        uint32
+	Daddr        uint32
+	Lport        uint16
+	Dport        uint16
+	DataLen      uint32
+	Timestamp_ns uint64
+	Data         []byte
 }
 
 func Inet_ntoa(ip uint32) string {
@@ -70,7 +70,7 @@ func Start(pid uint32) error {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, os.Kill)
 
-	fmt.Printf("%10s\t%10s\t%30s\t%30s\t%50s\n", "PID", "PROCESSNAME", "LADDR", "RADDR", "DATA")
+	fmt.Printf("%10s\t%10s\t%10s\t%30s\t%30s\t%50s\n", "PID", "PROCESSNAME", "TIMESTAMP_NS", "LADDR", "RADDR", "DATA")
 	go func() {
 		var event TCPEgressEvent
 		for {
@@ -81,9 +81,10 @@ func Start(pid uint32) error {
 			event.Lport = binary.LittleEndian.Uint16(data[12:14])
 			event.Dport = binary.LittleEndian.Uint16(data[14:16])
 			event.DataLen = binary.LittleEndian.Uint32(data[16:20])
-			event.Data = data[20:]
-			p, _ := ps.FindProcess(int(event.Pid))
-			fmt.Printf("%-10d\t%-10s\t%-30s\t%-30s\t%-50s\n", event.Pid, p.Executable(), Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), event.Data)
+			event.Timestamp_ns = binary.LittleEndian.Uint64(data[20:28])
+			event.Data = data[28:]
+			// p, _ := ps.FindProcess(int(event.Pid))
+			fmt.Printf("%-10d\t%-10s\t%-10d\t%-30s\t%-30s\t%-50s\n", event.Pid, "" /*p.Executable()*/, event.Timestamp_ns, Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), event.Data)
 		}
 	}()
 

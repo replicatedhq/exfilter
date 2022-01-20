@@ -42,7 +42,9 @@ var kSSLWriteRetProbeSpec = UprobeSpec{ObjPath: "/usr/lib/x86_64-linux-gnu/libss
 var kSSLReadEntryProbeSpec = UprobeSpec{ObjPath: "/usr/lib/x86_64-linux-gnu/libssl.so.1.1", Symbol: "SSL_read", Type: PROBE_ENTRY, ProbeFn: "probe_entry_SSL_read"}
 var kSSLReadRetProbeSpec = UprobeSpec{ObjPath: "/usr/lib/x86_64-linux-gnu/libssl.so.1.1", Symbol: "SSL_read", Type: PROBE_RET, ProbeFn: "probe_ret_SSL_read"}
 
-var kUProbes = []UprobeSpec{kSSLWriteEntryProbeSpec, kSSLWriteRetProbeSpec, kSSLReadEntryProbeSpec, kSSLReadRetProbeSpec}
+var kUProbes = []UprobeSpec{kSSLWriteEntryProbeSpec, kSSLWriteRetProbeSpec}
+
+// var kUProbes = []UprobeSpec{kSSLWriteEntryProbeSpec, kSSLWriteRetProbeSpec, kSSLReadEntryProbeSpec, kSSLReadRetProbeSpec}
 
 func Start() error {
 	b, err := ioutil.ReadFile("./bpf/openssl_tracer_bpf_funcs.c") // read c file to bytes slice

@@ -59,7 +59,7 @@ static __inline struct ssl_data_event_t* create_ssl_data_event(uint64_t current_
   event->timestamp_ns = bpf_ktime_get_ns();
   event->pid = current_pid_tgid >> 32;
   event->tid = current_pid_tgid & kMask32b;
-
+  // bpf_trace_printk("ssl timestamp %d\n", event->timestamp_ns);
   return event;
 }
 

@@ -12,6 +12,7 @@ struct packet {
     u16 lport;
     u16 dport;
     u32 len;
+	  u64 timestamp_ns;
     char data[SS_MAX_SEG_SIZE];
 };
 
@@ -32,13 +33,16 @@ int probe_tcp_sendmsg(struct pt_regs *ctx, struct sock *sk,
     unsigned int n, offset;
     char* buf;
     
-    if (family == AF_INET) {
+    // bpf_trace_printk("family %d\n", family);
+    if (family == AF_INET || family == AF_INET6) {
         n = bpf_get_smp_processor_id();
         packet = packet_array.lookup(&n);
         if(packet == NULL)
           return 0;
         
         packet->pid = pid;
+        packet->timestamp_ns = bpf_ktime_get_ns();
+        // bpf_trace_printk("tcp timestamp %d\n", packet->timestamp_ns);
         iter = &msg->msg_iter;
         if (iter->iov_offset != 0) {
           packet->len = size;

@@ -5,9 +5,9 @@ import (
 )
 
 func TestStartTCPProbe(t *testing.T) {
-	err := Start(20183)
+	err := Start(2505812)
 	if err != nil {
-		t.Errorf("error testing tls probe: %w", err)
+		t.Errorf("error testing tcp probe: %w", err)
 		t.Fail()
 	}
 }
