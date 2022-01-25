@@ -27,7 +27,15 @@ sudo make install
 popd 
 ```
 
-# Validation of installation
-``` cd exfilter/pkg/openssl-tracer```
+## Install exfilter
+```git clone https://github.com/replicatedhq/exfilter.git```
 
-``` go test```
+
+# Testing
+```cd exfilter/pkg/cmd```
+
+Start the local agent.
+
+```go run example/main.go```
+
+It loads the rules from the example.rules file and logs the events that matches the rules to the exfilter.log file. Any changes to the rules file will take effect after agent restarts. The agent currently captures all tcp egress events and ssl_write events. For https, it tries to find corresponding encrypted payload and replace it with plain text based on PID and timestamp.
