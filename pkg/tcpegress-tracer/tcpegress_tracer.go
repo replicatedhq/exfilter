@@ -123,7 +123,7 @@ func InitTCPTracer(pid uint32) (*bpf.Table, error) {
 }
 
 func InitTCPTracer1(pid uint32) (*bpf.Module, error) {
-	b, err := ioutil.ReadFile("../tcpegress-tracer/bpf/tcpegress_tracer_bpf.c") // read c file to bytes slice
+	b, err := ioutil.ReadFile("pkg/tcpegress-tracer/bpf/tcpegress_tracer_bpf.c") // read c file to bytes slice
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
@@ -136,6 +136,7 @@ func InitTCPTracer1(pid uint32) (*bpf.Module, error) {
 	}
 
 	m := bpf.NewModule(source, []string{})
+	fmt.Println("loaded tcp tracer")
 	return m, nil
 }
 

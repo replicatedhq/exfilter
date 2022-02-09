@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -18,8 +19,10 @@ import (
 	"github.com/mitchellh/go-ps"
 )
 
+var rulepath = flag.String("rule", "rules/example.rules", "rule file path")
+
 func main() {
-	prMap := ruleparser.ParseRuleFile("example.rules")
+	prMap := ruleparser.ParseRuleFile(*rulepath)
 
 	m, err := tcpegresstracer.InitTCPTracer1(0)
 	defer tcpegresstracer.DeInitTCPTracer(m)
@@ -45,6 +48,8 @@ func main() {
 	if err != nil {
 		log.Fatal("error loading bpf table for tls tracer:", err)
 	}
+
+	fmt.Println("exfilter agent initialized. ready to capture events...")
 
 	channel := make(chan []byte)
 	tls_channel := make(chan []byte)
@@ -138,7 +143,7 @@ func main() {
 				continue
 			}
 
-			p, _ := ps.FindProcess(int(event.Pid))
+			// p, _ := ps.FindProcess(int(event.Pid))
 			logevent := exfilterlogger.EgressEvent{}
 			logevent.Pid = event.Pid
 			logevent.Saddr = tcpegresstracer.Inet_ntoa(event.Saddr) + ":" + strconv.Itoa(int(event.Lport))
@@ -152,9 +157,9 @@ func main() {
 			}
 			logevent.Msg = eventmsg
 
-			exfilterlogger.LogEvent(logevent)
+			// exfilterlogger.LogEvent(logevent)
 
-			fmt.Printf("%-10d\t %-10d\t%-10s\t%-30s\t%-30s\t%-50s\n", event.Pid, event.Timestamp_ns, p.Executable(), tcpegresstracer.Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), tcpegresstracer.Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), string(event.Data))
+			fmt.Printf("%-10d\t %-10d\t%-10s\t%-30s\t%-30s\t%-50s\n", event.Pid, event.Timestamp_ns, "", tcpegresstracer.Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), tcpegresstracer.Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), string(event.Data))
 		}
 	}()
 
