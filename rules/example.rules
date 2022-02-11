@@ -1,0 +1,4 @@
+alert tcp any any -> any 80 (msg:"Http Get Event"; content:"command=GET")
+alert tcp any 443 -> any any (msg:"Https response"; content:"*")
+# alert tcp any 8080 -> any any (msg:"Http event"; content:"*")
+alert tcp any 80 -> any any (msg:"Http event"; content:"*")
