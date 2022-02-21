@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -10,9 +11,11 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/exfilter/exfilter/pkg/exfilterlogger"
 	openssltracer "github.com/exfilter/exfilter/pkg/openssl-tracer"
+	"github.com/exfilter/exfilter/pkg/post2db"
 	ruleparser "github.com/exfilter/exfilter/pkg/rule-parser"
 	tcpegresstracer "github.com/exfilter/exfilter/pkg/tcpegress-tracer"
 	bpf "github.com/iovisor/gobpf/bcc"
@@ -20,6 +23,14 @@ import (
 )
 
 var rulepath = flag.String("rule", "rules/example.rules", "rule file path")
+
+func _UnescapeUnicodeCharactersInJSON(_jsonRaw json.RawMessage) (json.RawMessage, error) {
+	str, err := strconv.Unquote(strings.Replace(strconv.Quote(string(_jsonRaw)), `\\u`, `\u`, -1))
+	if err != nil {
+		return nil, err
+	}
+	return []byte(str), nil
+}
 
 func main() {
 	prMap := ruleparser.ParseRuleFile(*rulepath)
@@ -111,7 +122,8 @@ func main() {
 			event.Dport = binary.LittleEndian.Uint16(data[14:16])
 			event.DataLen = binary.LittleEndian.Uint32(data[16:20])
 			event.Timestamp_ns = binary.LittleEndian.Uint64(data[20:28])
-			event.Data = data[28:]
+			// event.Data = bytes.Trim(data[28:28+event.DataLen], "\x00")
+			event.Data = bytes.Trim(data[32:32+event.DataLen], "\x00")
 
 			var ruleContents []ruleparser.RuleOption
 			// port match
@@ -126,7 +138,6 @@ func main() {
 			// payload match
 			isMatch := false
 			var eventmsg string
-
 			for _, ruleOpt := range ruleContents {
 				if ruleOpt.Content == "*" {
 					isMatch = true
@@ -142,22 +153,29 @@ func main() {
 			if !isMatch {
 				continue
 			}
+			fmt.Println(data)
 
 			// p, _ := ps.FindProcess(int(event.Pid))
 			logevent := exfilterlogger.EgressEvent{}
 			logevent.Pid = event.Pid
 			logevent.Saddr = tcpegresstracer.Inet_ntoa(event.Saddr) + ":" + strconv.Itoa(int(event.Lport))
 			logevent.Daddr = tcpegresstracer.Inet_ntoa(event.Daddr) + ":" + strconv.Itoa(int(event.Dport))
-			logevent.Timestamp_ns = event.Timestamp_ns
+			// logevent.Timestamp_ns = event.Timestamp_ns
+			logevent.Timestamp_ns = time.Now()
 			if len(tls_event_queue[event.Pid]) > 0 { // event is captured at ssl_write before it comes down to tcp_send, put unencrypted text in the data field
 				logevent.Data = string(tls_event_queue[event.Pid][0].Data[:tls_event_queue[event.Pid][0].Data_len])
 				tls_event_queue[event.Pid] = tls_event_queue[event.Pid][1:] // remove the tls event from the queue
 			} else {
+				// tmpData, _ := _UnescapeUnicodeCharactersInJSON(event.Data)
 				logevent.Data = string(event.Data)
 			}
 			logevent.Msg = eventmsg
 
 			// exfilterlogger.LogEvent(logevent)
+			err := post2db.PostEvent(logevent, "http://127.0.0.1:8000/api/egressevents/")
+			if err != nil {
+				fmt.Println("insert to db failed", err)
+			}
 
 			fmt.Printf("%-10d\t %-10d\t%-10s\t%-30s\t%-30s\t%-50s\n", event.Pid, event.Timestamp_ns, "", tcpegresstracer.Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), tcpegresstracer.Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), string(event.Data))
 		}

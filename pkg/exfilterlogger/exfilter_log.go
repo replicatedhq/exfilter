@@ -3,6 +3,7 @@ package exfilterlogger
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -14,7 +15,7 @@ type EgressEvent struct {
 	Daddr        string
 	Data         string
 	Msg          string
-	Timestamp_ns uint64
+	Timestamp_ns time.Time
 }
 
 func InitLogger(logFilePath string) (*os.File, error) {
