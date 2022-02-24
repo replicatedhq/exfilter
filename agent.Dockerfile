@@ -93,7 +93,7 @@ RUN git clone --depth 1 --branch "$BCC_VERSION" https://github.com/iovisor/bcc.g
 
 
 RUN apt-get update
-RUN apt-get install -y wget linux-headers-5.4.0-91-generic
+RUN apt-get install -y wget linux-headers-5.13.0-30-generic
 
 RUN wget -P /tmp https://go.dev/dl/go1.17.6.linux-amd64.tar.gz
 
@@ -115,4 +115,4 @@ COPY ./pkg ./pkg
 RUN go build pkg/cmd/example/main.go
 COPY ./rules ./rules
 
-ENTRYPOINT ["/app/main", "-rule main.rules"]
+CMD ["./main", "-rule", "rules/example.rules"]

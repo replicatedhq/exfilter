@@ -33,6 +33,7 @@ func _UnescapeUnicodeCharactersInJSON(_jsonRaw json.RawMessage) (json.RawMessage
 }
 
 func main() {
+	flag.Parse()
 	prMap := ruleparser.ParseRuleFile(*rulepath)
 
 	m, err := tcpegresstracer.InitTCPTracer1(0)
@@ -172,7 +173,8 @@ func main() {
 			logevent.Msg = eventmsg
 
 			// exfilterlogger.LogEvent(logevent)
-			err := post2db.PostEvent(logevent, "http://127.0.0.1:8000/api/egressevents/")
+			// err := post2db.PostEvent(logevent, "http://127.0.0.1:8000/api/egressevents/")
+			err := post2db.PostEvent(logevent, "http://exfilterui:8000/api/egressevents/")
 			if err != nil {
 				fmt.Println("insert to db failed", err)
 			}

@@ -16,10 +16,11 @@ spec:
       containers:
       - name: test
         image: alexchan20/exfilter_agent:latest
+        imagePullPolicy: Always
         resources: {}
         volumeMounts:
         - name: policy
-          mountPath: /app/
+          mountPath: /app/rules/
         securityContext:
           capabilities:
             add:
