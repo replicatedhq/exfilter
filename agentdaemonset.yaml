@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: exfilteragent
+  labels:
+    k8s-app: exfilter-agent
+spec:
+  selector:
+    matchLabels:
+      name: exfilter-agent
+  template:
+    metadata:
+      labels:
+        name: exfilter-agent
+    spec:
+      containers:
+      - name: test
+        image: alexchan20/exfilter_agent:latest
+        imagePullPolicy: Always
+        resources: {}
+        volumeMounts:
+        - name: policy
+          mountPath: /app/rules/
+        securityContext:
+          capabilities:
+            add:
+            - SYS_PTRACE
+            - SYS_ADMIN
+          privileged: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: policy
+        configMap:
+          name: ebpf-policy
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ebpf-policy
+data:
+  example.rules: |
+    alert tcp any any -> any 80 (msg:"Http Get Event"; content:"command=GET")
+    alert tcp any 443 -> any any (msg:"Https response"; content:"*")
+    alert tcp any 80 -> any any (msg:"Http event"; content:"*")

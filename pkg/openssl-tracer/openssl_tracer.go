@@ -110,14 +110,14 @@ func Start() error {
 }
 
 func InitTLSTracer() (*bpf.Module, error) {
-	b, err := ioutil.ReadFile("../openssl-tracer/bpf/openssl_tracer_bpf_funcs.c")
+	b, err := ioutil.ReadFile("pkg/openssl-tracer/bpf/openssl_tracer_bpf_funcs.c")
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
 
 	source := string(b)
 	m := bpf.NewModule(source, []string{})
-
+	fmt.Println("loaded openssl tracer")
 	return m, nil
 }
 

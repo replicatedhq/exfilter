@@ -1,6 +1,7 @@
 package tcpegresstracer
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
@@ -82,7 +83,7 @@ func Start(pid uint32) error {
 			event.Dport = binary.LittleEndian.Uint16(data[14:16])
 			event.DataLen = binary.LittleEndian.Uint32(data[16:20])
 			event.Timestamp_ns = binary.LittleEndian.Uint64(data[20:28])
-			event.Data = data[28:]
+			event.Data = bytes.Trim(data[28:], "\x00")
 			// p, _ := ps.FindProcess(int(event.Pid))
 			fmt.Printf("%-10d\t%-10s\t%-10d\t%-30s\t%-30s\t%-50s\n", event.Pid, "" /*p.Executable()*/, event.Timestamp_ns, Inet_ntoa(event.Saddr)+":"+strconv.Itoa(int(event.Lport)), Inet_ntoa(event.Daddr)+":"+strconv.Itoa(int(event.Dport)), event.Data)
 		}
@@ -123,7 +124,7 @@ func InitTCPTracer(pid uint32) (*bpf.Table, error) {
 }
 
 func InitTCPTracer1(pid uint32) (*bpf.Module, error) {
-	b, err := ioutil.ReadFile("../tcpegress-tracer/bpf/tcpegress_tracer_bpf.c") // read c file to bytes slice
+	b, err := ioutil.ReadFile("pkg/tcpegress-tracer/bpf/tcpegress_tracer_bpf.c") // read c file to bytes slice
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
@@ -136,6 +137,7 @@ func InitTCPTracer1(pid uint32) (*bpf.Module, error) {
 	}
 
 	m := bpf.NewModule(source, []string{})
+	fmt.Println("loaded tcp tracer")
 	return m, nil
 }
 

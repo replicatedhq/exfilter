@@ -15,7 +15,8 @@ While there are release versions available, it's recommended to build bcc from s
 ```sudo apt install -y bison build-essential cmake flex git libedit-dev libllvm7 llvm-7-dev libclang-7-dev python zlib1g-dev libelf-dev libfl-dev python3-distutils ```
 
 ### Install and compile bcc
-```git clone https://github.com/iovisor/bcc.git
+```
+git clone https://github.com/iovisor/bcc.git
 mkdir bcc/build; cd bcc/build
 cmake ..
 make
